@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一起画一只画 - 团队接力版 🎨</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+            padding: 15px;
+            gap: 15px;
+        }
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .canvas-header {
+            padding: 12px 20px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .canvas-header h1 { font-size: 18px; font-weight: 600; }
+        .timer {
+            font-size: 28px;
+            font-weight: bold;
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 8px;
+            min-width: 80px;
+            text-align: center;
+        }
+        .timer.urgent {
+            background: rgba(255,0,0,0.6) !important;
+            animation: pulse 0.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        #drawingCanvas {
+            flex: 1;
+            cursor: crosshair;
+            background: white;
+        }
+        .canvas-footer {
+            padding: 12px 15px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .brush-size { display: flex; align-items: center; gap: 8px; }
+        .brush-size label { font-size: 13px; color: #666; }
+        .brush-size input[type="range"] { width: 80px; }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: #e9ecef; color: #495057; }
+        .btn-secondary:hover { background: #dee2e6; }
+        .sidebar {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        .panel h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .theme-display {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        .theme-label { font-size: 11px; opacity: 0.8; margin-bottom: 5px; }
+        .theme-word { font-size: 18px; font-weight: bold; }
+        .hidden { display: none !important; }
+        .login-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        .login-box h2 { margin-bottom: 15px; color: #333; }
+        .login-box p { color: #666; margin-bottom: 25px; font-size: 14px; }
+        .login-box input {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-modal" id="loginModal">
+        <div class="login-box">
+            <h2>🎨 一起画一只画</h2>
+            <p>团队接力版 - 6人PK赛<br>每人5秒，盲盒接力，猜主题！</p>
+            <input type="text" id="usernameInput" placeholder="输入你的名字" maxlength="10">
+            <button onclick="joinGame()">加入游戏</button>
+        </div>
+    </div>
+
+    <div class="container hidden" id="gameContainer">
+        <div class="canvas-area">
+            <div class="canvas-header">
+                <h1>🎨 一起画一只画 - 团队接力版</h1>
+                <div class="timer" id="timer">00:05</div>
+            </div>
+            <canvas id="drawingCanvas"></canvas>
+            <div class="canvas-footer">
+                <div class="brush-size">
+                    <label>画笔粗细:</label>
+                    <input type="range" id="brushSize" min="2" max="30" value="8">
+                </div>
+                <div class="action-btns">
+                    <button class="btn btn-secondary" onclick="clearCanvas()">清空画布</button>
+                    <button class="btn btn-primary" onclick="saveImage()">保存作品</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel">
+                <div class="theme-display">
+                    <div class="theme-label">游戏状态</div>
+                    <div class="theme-word" id="themeWord">等待开始</div>
+                </div>
+                <button class="btn btn-primary" onclick="startGame()" id="startBtn" style="width:100%">开始新游戏</button>
+            </div>
+            <div id="teamPanel"></div>
+            <div class="panel" style="flex:1;display:flex;flex-direction:column;">
+                <h3>💬 聊天室</h3>
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="chat-input">
+                    <input type="text" id="chatInput" placeholder="输入消息..." onkeypress="if(event.key==='Enter')sendChat()">
+                    <button class="btn btn-primary" onclick="sendChat()">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ============================================
+// 一起画一只画 - 团队接力版 (完整独立版)
+// ============================================
+
+let canvas, ctx;
+let myName = '', myTeam = null, myRole = 'audience';
+let gameState = 'waiting';
+let currentTeam = 'A', currentPainterIndex = 0, timeLeft = 5;
+let timerInterval = null, currentTheme = '';
+let allStrokes = { A: [], B: [] };
+let teamCanvases = { A: null, B: null };
+let teamAGuesses = [], teamBGuesses = [];
+
+const teams = {
+    A: { name: '🔴 红队', color: '#FF6B6B', painters: [], audience: [] },
+    B: { name: '🔵 蓝队', color: '#4ECDC4', painters: [], audience: [] }
+};
+
+const themes = [
+    "直播带货", "For You Page", "抖音神曲", "外卖到了", 
+    "加班到凌晨", "周五下午6点", "团建爬山", "年会表演",
+    "演唱会", "熊猫", "火箭", "海底世界",
+    "大熊猫", "猫咪", "恐龙", "外星人", 
+    "宇宙", "海洋", "森林", "彩虹",
+    "音乐", "舞蹈", "美食", "旅行",
+    "打工人", "摸鱼", "躺平", "社恐"
+];
+
+// ===== 初始化 =====
+function init() {
+    canvas = document.getElementById('drawingCanvas');
+    ctx = canvas.getContext('2d');
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    canvas.addEventListener('touchstart', handleTouch, { passive: false });
+    canvas.addEventListener('touchmove', handleTouch, { passive: false });
+    canvas.addEventListener('touchend', stopDrawing);
+}
+
+function resizeCanvas() {
+    const container = canvas.parentElement;
+    const w = container.clientWidth;
+    const h = container.clientHeight - 120;
+    const temp = document.createElement('canvas');
+    temp.width = canvas.width || w;
+    temp.height = canvas.height || h;
+    temp.getContext('2d').drawImage(canvas, 0, 0);
+    canvas.width = w;
+    canvas.height = h;
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(temp, 0, 0, w, h);
+}
+
+// ===== 画画功能 =====
+function startDrawing(e) {
+    if (gameState !== 'painting' || myRole !== 'painter' || myTeam !== currentTeam) return;
+    if (teams[currentTeam].painters[currentPainterIndex] !== myName) return;
+    
+    isDrawing = true;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.strokeStyle = currentTeam === 'A' ? '#FF6B6B' : '#4ECDC4';
+    ctx.lineWidth = 8;
+    ctx.lineCap = 'round';
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+}
+
+function stopDrawing() {
+    if (!isDrawing) return;
+    isDrawing = false;
+    ctx.beginPath();
+}
+
+function handleTouch(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const mouseEvent = new MouseEvent(
+        e.type === 'touchstart' ? 'mousedown' : e.type === 'touchmove' ? 'mousemove' : 'mouseup',
+        { clientX: touch.clientX, clientY: touch.clientY }
+    );
+    canvas.dispatchEvent(mouseEvent);
+}
+
+// ===== 笔触痕迹渲染 =====
+function renderStrokeTrails() {
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const strokes = allStrokes[currentTeam];
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    strokes.forEach((stroke, index) => {
+        const opacity = 0.15 + (index * 0.08);
+        ctx.strokeStyle = `rgba(100, 100, 100, ${opacity})`;
+        if (stroke.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(stroke[0].x, stroke[0].y);
+            for (let i = 2; i < stroke.length; i += 2) {
+                ctx.lineTo(stroke[i].x, stroke[i].y);
+            }
+            ctx.lineTo(stroke[stroke.length - 1].x, stroke[stroke.length - 1].y);
+            ctx.stroke();
+        }
+    });
+    
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = 'rgba(150, 150, 150, 0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText('👆 只能看到前面队友的笔触痕迹', canvas.width / 2, 30);
+}
+
+// ===== 游戏流程 =====
+function startGame() {
+    if (teams.A.painters.length < 3 || teams.B.painters.length < 3) {
+        alert('每队需要至少3名画家！\n当前：红队' + teams.A.painters.length + '人，蓝队' + teams.B.painters.length + '人');
+        return;
+    }
+    gameState = 'painting';
+    currentTeam = 'A';
+    currentPainterIndex = 0;
+    currentTheme = themes[Math.floor(Math.random() * themes.length)];
+    allStrokes = { A: [], B: [] };
+    teamCanvases = { A: null, B: null };
+    teamAGuesses = [];
+    teamBGuesses = [];
+    
+    document.getElementById('themeWord').textContent = '🔥 游戏进行中';
+    document.getElementById('startBtn').textContent = '游戏进行中...';
+    document.getElementById('startBtn').disabled = true;
+    
+    showNotification('🎮 游戏开始！');
+    setTimeout(() => startTeamRound(), 1500);
+}
+
+function startTeamRound() {
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (currentPainterIndex > 0) renderStrokeTrails();
+    
+    const painterName = teams[currentTeam].painters[currentPainterIndex];
+    const isMyTurn = painterName === myName && myTeam === currentTeam && myRole === 'painter';
+    
+    updateUI();
+    
+    if (isMyTurn) showPainterModal();
+    else showNotification(`${teams[currentTeam].name} 第${currentPainterIndex + 1}棒：${painterName}`);
+    
+    timeLeft = 5;
+    startTimer(() => endPainterTurn());
+}
+
+function showPainterModal() {
+    const modal = document.createElement('div');
+    modal.id = 'painterModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);display:flex;justify-content:center;align-items:center;z-index:10000;';
+    modal.innerHTML = `
+        <div style="background:white;padding:50px;border-radius:20px;text-align:center;max-width:500px;">
+            <div style="font-size:60px;margin-bottom:20px;">🎨</div>
+            <h2 style="color:#667eea;margin-bottom:20px;font-size:28px;">${teams[currentTeam].name} 第${currentPainterIndex + 1}棒</h2>
+            <p style="font-size:18px;margin-bottom:20px;color:#666;">你要画的主题是：</p>
+            <div style="font-size:48px;font-weight:bold;color:#764ba2;margin:20px 0;padding:20px;background:linear-gradient(135deg,#667eea20,#764ba220);border-radius:15px;border:3px solid #667eea;">
+                「${currentTheme}」
+            </div>
+            <div style="background:#fff3cd;padding:15px;border-radius:10px;margin:20px 0;color:#856404;">
+                <p style="margin:0;font-size:16px;">⏰ 你只有 <strong>5秒钟</strong>！</p>
+                <p style="margin:5px 0 0 0;font-size:14px;">👆 只能看到前面队友的笔触痕迹</p>
+            </div>
+            <button onclick="document.getElementById('painterModal').remove()" style="padding:15px 50px;background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:10px;font-size:18px;cursor:pointer;">
+                开始画画！
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function startTimer(onComplete) {
+    if (timerInterval) clearInterval(timerInterval);
+    const timerEl = document.getElementById('timer');
+    timerEl.textContent = '00:0' + timeLeft;
+    timerEl.classList.toggle('urgent', timeLeft <= 3);
+    
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        timerEl.textContent = '00:0' + timeLeft;
+        timerEl.classList.toggle('urgent', timeLeft <= 3);
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            if (onComplete) onComplete();
+        }
+    }, 1000);
+}
+
+function endPainterTurn() {
+    if (!teamCanvases[currentTeam]) {
+        teamCanvases[currentTeam] = document.createElement('canvas');
+        teamCanvases[currentTeam].width = canvas.width;
+        teamCanvases[currentTeam].height = canvas.height;
+    }
+    teamCanvases[currentTeam].getContext('2d').drawImage(canvas, 0, 0);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const strokePoints = [];
+    for (let y = 0; y < canvas.height; y += 10) {
+        for (let x = 0; x < canvas.width; x += 10) {
+            const i = (y * canvas.width + x) * 4;
+            if (imageData.data[i] !== 255 || imageData.data[i+1] !== 255 || imageData.data[i+2] !== 255) {
+                strokePoints.push({ x, y });
+            }
+        }
+    }
+    allStrokes[currentTeam].push(strokePoints);
+    
+    showNotification(`${teams[currentTeam].name} 第${currentPainterIndex + 1}棒完成！`);
+    currentPainterIndex++;
+    
+    if (currentPainterIndex < 3) {
+        setTimeout(() => startTeamRound(), 1500);
+    } else if (currentTeam === 'A') {
+        currentTeam = 'B';
+        currentPainterIndex = 0;
+        showNotification('🔄 红队完成！现在轮到蓝队！');
+        setTimeout(() => startTeamRound(), 2000);
+    } else {
+        setTimeout(() => startRevealPhase(), 1500);
+    }
+}
+
+function startRevealPhase() {
+    gameState = 'revealing';
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:10000;padding:40px;overflow-y:auto;';
+    
+    modal.innerHTML = `
+        <div style="text-align:center;color:white;max-width:1200px;width:100%;">
+            <div style="font-size:80px;margin-bottom:20px;">🎉</div>
+            <h1 style="font-size:48px;margin-bottom:20px;text-shadow:2px 2px 4px rgba(0,0,0,0.3);">揭晓时刻！</h1>
+            <p style="font-size:22px;margin-bottom:40px;opacity:0.9;">两队的接力作品即将揭晓</p>
+            
+            <div style="display:flex;gap:30px;justify-content:center;margin-bottom:40px;flex-wrap:wrap;">
+                <div style="background:rgba(255,255,255,0.95);border-radius:20px;padding:20px;flex:1;min-width:350px;max-width:500px;color:#333;">
+                    <h3 style="color:#FF6B6B;margin-bottom:15px;font-size:24px;">🔴 红队作品</h3>
+                    <div id="revealA" style="background:#f8f9fa;border-radius:10px;height:300px;display:flex;align-items:center;justify-content:center;color:#999;">准备揭晓...</div>
+                    <div style="margin-top:15px;font-size:14px;color:#666;">画家: ${teams.A.painters.join(' → ')}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.95);border-radius:20px;padding:20px;flex:1;min-width:350px;max-width:500px;color:#333;">
+                    <h3 style="color:#4ECDC4;margin-bottom:15px;font-size:24px;">🔵 蓝队作品</h3>
+                    <div id="revealB" style="background:#f8f9fa;border-radius:10px;height:300px;display:flex;align-items:center;justify-content:center;color:#999;">准备揭晓...</div>
+                    <div style="margin-top:15px;font-size:14px;color:#666;">画家: ${teams.B.painters.join(' → ')}</div>
+                </div>
+            </div>
+            <button onclick="showArtworks()" style="padding:20px 60px;font-size:24px;background:#ffd700;color:#333;border:none;border-radius:15px;cursor:pointer;font-weight:bold;box-shadow:0 10px 30px rgba(0,0,0,0.3);">🎭 揭晓两队的作品！</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    setTimeout(() => {
+        ['A', 'B'].forEach(t => {
+            const container = document.getElementById(`reveal${t}`);
+            if (container && teamCanvases[t]) {
+                container.innerHTML = '';
+                const img = document.createElement('img');
+                img.src = teamCanvases[t].toDataURL();
+                img.style.cssText = 'max-width:100%;max-height:100%;border-radius:8px;';
+                container.appendChild(img);
+            }
+        });
+    }, 500);
+}
+
+function showArtworks() {
+    const btn = event.target;
+    btn.textContent = '🎯 开始猜测！';
+    btn.onclick = startGuessingPhase;
+    
+    const hint = document.createElement('p');
+    hint.style.cssText = 'margin-top:20px;font-size:18px;color:rgba(255,255,255,0.8);';
+    hint.textContent = '两队的作品都已揭晓！观众们，准备好猜测了吗？';
+    btn.parentElement.appendChild(hint);
+}
+
+function startGuessingPhase() {
+    gameState = 'guessing';
+    document.querySelector('[onclick*="showArtworks"]').closest('div[style*="fixed"]').remove();
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;flex-direction:column;justify-content:flex-start;align-items:center;z-index:10000;padding:40px;overflow-y:auto;';
+    
+    modal.innerHTML = `
+        <div style="text-align:center;color:white;width:100%;max-width:1200px;">
+            <h1 style="font-size:42px;margin-bottom:10px;text-shadow:2px 2px 4px rgba(0,0,0,0.3);">🎯 猜测时间！</h1>
+            <p style="font-size:20px;margin-bottom:30px;opacity:0.9;">观众猜对主题可以为队伍加分！30秒倒计时</p>
+            
+            <div style="display:flex;gap:30px;justify-content:center;margin-bottom:40px;flex-wrap:wrap;">
+                <div style="background:rgba(255,255,255,0.95);border-radius:20px;padding:25px;flex:1;min-width:350px;max-width:500px;color:#333;">
+                    <h3 style="color:#FF6B6B;margin-bottom:15px;font-size:22px;">🔴 红队作品</h3>
+                    <div id="guessImgA" style="background:#f8f9fa;border-radius:10px;height:280px;display:flex;align-items:center;justify-content:center;color:#999;margin-bottom:15px;">加载中...</div>
+                    <div style="background:#fff3cd;padding:12px;border-radius:8px;margin-bottom:15px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:bold;color:#856404;">红队主题是什么？</label>
+                        <input type="text" id="guessInputA" placeholder="输入猜测..." style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;font-size:16px;box-sizing:border-box;">
+                    </div>
+                    <button onclick="submitGuess('A')" style="width:100%;padding:12px;background:#FF6B6B;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;">提交猜测</button>
+                </div>
+                
+                <div style="background:rgba(255,255,255,0.95);border-radius:20px;padding:25px;flex:1;min-width:350px;max-width:500px;color:#333;">
+                    <h3 style="color:#4ECDC4;margin-bottom:15px;font-size:22px;">🔵 蓝队作品</h3>
+                    <div id="guessImgB" style="background:#f8f9fa;border-radius:10px;height:280px;display:flex;align-items:center;justify-content:center;color:#999;margin-bottom:15px;">加载中...</div>
+                    <div style="background:#e6f3ff;padding:12px;border-radius:8px;margin-bottom:15px;">
+                        <label style="display:block;margin-bottom:8px;font-weight:bold;color:#0066cc;">蓝队主题是什么？</label>
+                        <input type="text" id="guessInputB" placeholder="输入猜测..." style="width:100%;padding:10px;border:2px solid #ddd;border-radius:6px;font-size:16px;box-sizing:border-box;">
+                    </div>
+                    <button onclick="submitGuess('B')" style="width:100%;padding:12px;background:#4ECDC4;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;">提交猜测</button>
+                </div>
+            </div>
+            
+            <div style="background:rgba(0,0,0,0.3);padding:20px 40px;border-radius:15px;display:inline-block;">
+                <p style="font-size:24px;margin:0;">⏰ 剩余: <span id="guessTimer" style="font-weight:bold;color:#ffd700;">30</span> 秒</p>
+            </div>
+            
+            <div style="margin-top:30px;">
+                <button onclick="endGuessing()" style="padding:15px 40px;font-size:18px;background:#28a745;color:white;border:none;border-radius:10px;cursor:pointer;margin-right:15px;">结束猜测，揭晓答案</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    setTimeout(() => {
+        ['A', 'B'].forEach(t => {
+            const container = document.getElementById(`guessImg${t}`);
+            if (container && teamCanvases[t]) {
+                container.innerHTML = '';
+                const img = document.createElement('img');
+                img.src = teamCanvases[t].toDataURL();
+                img.style.cssText = 'max-width:100%;max-height:100%;border-radius:8px;';
+                container.appendChild(img);
+            }
+        });
+    }, 500);
+    
+    let t = 30;
+    const timerEl = document.getElementById('guessTimer');
+    timerInterval = setInterval(() => {
+        t--;
+        if (timerEl) timerEl.textContent = t;
+        if (t <= 0) clearInterval(timerInterval);
+    }, 1000);
+}
+
+function submitGuess(team) {
+    const input = document.getElementById(team === 'A' ? 'guessInputA' : 'guessInputB');
+    const guess = input.value.trim();
+    if (!guess) { alert('请输入猜测！'); return; }
+    
+    if (team === 'A') { teamAGuesses.push(guess); input.value = ''; showNotification(`🔴 红队猜测：「${guess}」`); }
+    else { teamBGuesses.push(guess); input.value = ''; showNotification(`🔵 蓝队猜测：「${guess}」`); }
+}
+
+function endGuessing() {
+    clearInterval(timerInterval);
+    const modal = document.querySelector('#guessTimer');
+    if (modal) modal.closest('div[style*="fixed"]').remove();
+    showResults();
+}
+
+function showResults() {
+    const isA = teamAGuesses.some(g => g === currentTheme || currentTheme.includes(g) || g.includes(currentTheme));
+    const isB = teamBGuesses.some(g => g === currentTheme || currentTheme.includes(g) || g.includes(currentTheme));
+    const winner = isA && isB ? 'both' : isA ? 'A' : isB ? 'B' : 'none';
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:10000;padding:40px;overflow-y:auto;';
+    modal.innerHTML = `
+        <div style="text-align:center;color:white;max-width:1200px;width:100%;">
+            <div style="font-size:80px;margin-bottom:20px;">🏆</div>
+            <h1 style="font-size:52px;margin-bottom:20px;text-shadow:2px 2px 4px rgba(0,0,0,0.3);">${winner === 'A' ? '🔴 红队获胜！' : winner === 'B' ? '🔵 蓝队获胜！' : winner === 'both' ? '🎉 平局！' : '🎭 揭晓答案'}</h1>
+            
+            <div style="background:rgba(255,255,255,0.95);border-radius:20px;padding:30px;margin:30px auto;max-width:600px;color:#333;">
+                <p style="font-size:20px;margin-bottom:15px;color:#666;">本局主题</p>
+                <div style="font-size:42px;font-weight:bold;color:#764ba2;padding:20px;background:linear-gradient(135deg,#667eea20,#764ba220);border-radius:15px;border:3px solid #667eea;">「${currentTheme}」</div>
+                
+                <div style="margin-top:25px;padding-top:25px;border-top:2px dashed #ddd;">
+                    <p style="font-size:16px;color:#666;margin-bottom:10px;">猜测情况：</p>
+                    <div style="display:flex;gap:20px;justify-content:center;">
+                        <div style="flex:1;padding:15px;background:${isA ? '#d4edda' : '#f8f9fa'};border-radius:10px;border:2px solid ${isA ? '#28a745' : '#ddd'};">
+                            <strong style="color:#FF6B6B;">🔴 红队</strong>
+                            <p style="margin:5px 0 0 0;font-size:14px;">${isA ? '✅ 猜对了！' : teamAGuesses.length > 0 ? '❌ 没猜对' : '无猜测'}</p>
+                            ${teamAGuesses.length > 0 ? `<p style="margin:5px 0 0 0;font-size:12px;color:#666;">猜测：${teamAGuesses.join(', ')}</p>` : ''}
+                        </div>
+                        <div style="flex:1;padding:15px;background:${isB ? '#d4edda' : '#f8f9fa'};border-radius:10px;border:2px solid ${isB ? '#28a745' : '#ddd'};">
+                            <strong style="color:#4ECDC4;">🔵 蓝队</strong>
+                            <p style="margin:5px 0 0 0;font-size:14px;">${isB ? '✅ 猜对了！' : teamBGuesses.length > 0 ? '❌ 没猜对' : '无猜测'}</p>
+                            ${teamBGuesses.length > 0 ? `<p style="margin:5px 0 0 0;font-size:12px;color:#666;">猜测：${teamBGuesses.join(', ')}</p>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;">
+                <button onclick="startNewGame()" style="padding:20px 50px;font-size:22px;background:#28a745;color:white;border:none;border-radius:15px;cursor:pointer;font-weight:bold;box-shadow:0 5px 20px rgba(0,0,0,0.3);">🎮 再来一局</button>
+                <button onclick="showVoting()" style="padding:20px 50px;font-size:22px;background:#ffd700;color:#333;border:none;border-radius:15px;cursor:pointer;font-weight:bold;box-shadow:0 5px 20px rgba(0,0,0,0.3);">🏆 投票颁奖</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function startNewGame() {
+    currentTeam = 'A';
+    currentPainterIndex = 0;
+    currentTheme = themes[Math.floor(Math.random() * themes.length)];
+    allStrokes = { A: [], B: [] };
+    teamCanvases = { A: null, B: null };
+    teamAGuesses = [];
+    teamBGuesses = [];
+    
+    document.querySelectorAll('[style*="position:fixed"]').forEach(m => { if (m.id !== 'loginModal' && m.id !== 'gameContainer') m.remove(); });
+    
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    gameState = 'waiting';
+    document.getElementById('themeWord').textContent = '等待开始';
+    document.getElementById('startBtn').textContent = '开始新游戏';
+    document.getElementById('startBtn').disabled = false;
+    
+    showNotification('🎮 已重置，可以开始新游戏！');
+}
+
+function showVoting() {
+    alert('🏆 投票颁奖！\n\n可以现场让大家举手投票：\n\n🎨 最抽象奖\n😂 最搞笑奖\n🎯 最贴合主题奖\n🤝 最佳默契组');
+}
+
+function updateUI() {
+    const themeWord = document.getElementById('themeWord');
+    if (gameState === 'painting') {
+        const painterName = teams[currentTeam].painters[currentPainterIndex];
+        themeWord.textContent = `${teams[currentTeam].name} 第${currentPainterIndex + 1}/3棒`;
+    }
+}
+
+function showTeamSelect() {
+    const modal = document.createElement('div');
+    modal.id = 'teamSelectModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;justify-content:center;align-items:center;z-index:10001;';
+    
+    modal.innerHTML = `
+        <div style="background:white;padding:50px;border-radius:20px;text-align:center;max-width:500px;width:90%;">
+            <h2 style="margin-bottom:30px;color:#333;font-size:28px;">🎮 选择你的队伍</h2>
+            <div style="display:flex;gap:20px;justify-content:center;margin-bottom:30px;">
+                <button onclick="selectTeam('A')" style="padding:30px 50px;font-size:20px;background:#FF6B6B;color:white;border:none;border-radius:15px;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 10px 30px rgba(255,107,107,0.4)';" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none';">
+                    🔴 红队
+                </button>
+                <button onclick="selectTeam('B')" style="padding:30px 50px;font-size:20px;background:#4ECDC4;color:white;border:none;border-radius:15px;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 10px 30px rgba(78,205,196,0.4)';" onmouseout="this.style.transform='scale(1)';this.style.boxShadow='none';">
+                    🔵 蓝队
+                </button>
+            </div>
+            <p style="color:#666;font-size:14px;">每队需要3名画家，先选择队伍的人优先成为画家</p>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function selectTeam(team) {
+    myTeam = team;
+    document.getElementById('teamSelectModal').remove();
+    
+    const t = teams[team];
+    if (t.painters.length < 3) {
+        myRole = 'painter';
+        t.painters.push(myName);
+    } else {
+        myRole = 'audience';
+        t.audience.push(myName);
+    }
+    
+    updateTeamPanel();
+    showNotification(`${myName} 加入${t.name}！角色：${myRole === 'painter' ? '🎨画家' : '👀观众'}`);
+}
+
+function updateTeamPanel() {
+    let panel = document.getElementById('teamPanel');
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'teamPanel';
+        panel.className = 'panel';
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.insertBefore(panel, sidebar.children[1]);
+    }
+    
+    panel.innerHTML = `
+        <h3>🏆 队伍状态</h3>
+        <div style="margin:10px 0;padding:10px;background:#fff0f0;border-radius:8px;border-left:4px solid #FF6B6B;">
+            <strong style="color:#FF6B6B;">🔴 红队</strong>
+            <div style="font-size:12px;color:#666;margin-top:5px;">
+                画家: ${teams.A.painters.join(', ') || '待加入'}<br>
+                观众: ${teams.A.audience.join(', ') || '无'}
+            </div>
+        </div>
+        <div style="margin:10px 0;padding:10px;background:#f0ffff;border-radius:8px;border-left:4px solid #4ECDC4;">
+            <strong style="color:#4ECDC4;">🔵 蓝队</strong>
+            <div style="font-size:12px;color:#666;margin-top:5px;">
+                画家: ${teams.B.painters.join(', ') || '待加入'}<br>
+                观众: ${teams.B.audience.join(', ') || '无'}
+            </div>
+        </div>
+        ${gameState === 'waiting' ? `<button onclick="showTeamSelect()" class="btn btn-primary" style="width:100%;margin-top:10px;">加入/更换队伍</button>` : ''}
+    `;
+}
+
+function showNotification(msg) {
+    const n = document.createElement('div');
+    n.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,#667eea,#764ba2);color:white;padding:15px 30px;border-radius:50px;font-size:16px;font-weight:bold;box-shadow:0 5px 20px rgba(0,0,0,0.3);z-index:99999;animation:slideDown 0.3s ease;';
+    n.textContent = msg;
+    document.body.appendChild(n);
+    setTimeout(() => { n.style.animation = 'slideUp 0.3s ease'; setTimeout(() => n.remove(), 300); }, 4000);
+}
+
+function joinGame() {
+    const name = document.getElementById('usernameInput').value.trim();
+    if (!name) { alert('请输入名字！'); return; }
+    myName = name;
+    document.getElementById('loginModal').style.display = 'none';
+    document.getElementById('gameContainer').classList.remove('hidden');
+    init();
+    updateTeamPanel();
+    showTeamSelect();
+}
+
+function clearCanvas() {
+    if (confirm('清空画布？')) {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+}
+
+function saveImage() {
+    const link = document.createElement('a');
+    link.download = `一起画_${new Date().getTime()}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+}
+
+function sendChat() {
+    const input = document.getElementById('chatInput');
+    const msg = input.value.trim();
+    if (msg) {
+        const chat = document.getElementById('chatMessages');
+        chat.innerHTML += `<div><strong>我:</strong> ${msg}</div>`;
+        chat.scrollTop = chat.scrollHeight;
+        input.value = '';
+    }
+}
+
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideDown { from { transform: translate(-50%, -100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+    @keyframes slideUp { from { transform: translate(-50%, 0); opacity: 1; } to { transform: translate(-50%, -100%); opacity: 0; } }
+`;
+document.head.appendChild(style);
+</script>
+</body>
+</html>
